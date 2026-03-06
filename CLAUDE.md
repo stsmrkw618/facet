@@ -13,7 +13,7 @@
 ## 技術スタック
 
 ### 現在（プロトタイプ）
-- 単一HTMLファイル（`facet-scanner-v2.html`）
+- 単一HTMLファイル（`index.html`）
 - MediaPipe FaceLandmarker（CDN経由、ブラウザ内推論）
 - バニラJS
 

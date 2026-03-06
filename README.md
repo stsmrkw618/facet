@@ -3,7 +3,7 @@
 ## クイックスタート
 
 ### 現在の状態
-`facet-scanner-v2.html` が最新の動作するプロトタイプです。
+`index.html` が最新の動作するプロトタイプです。
 ブラウザで直接開いて動作確認できます。
 
 ### Next.jsプロジェクトへの移行手順
@@ -56,7 +56,7 @@ facet/
 |---------|------|
 | `CLAUDE.md` | Claude Code用のプロジェクト知識ベース |
 | `README.md` | このファイル |
-| `facet-scanner-v2.html` | 最新の動作するプロトタイプ（全機能入り） |
+| `index.html` | 最新の動作するプロトタイプ（全機能入り） |
 | `archive/` | 初期段階の古いファイル置き場 |
 | `archive/facet-yaw-debug.html` | Yaw方向デバッグツール（左右確認用） |
 | `archive/facet-camera-demo.html` | 初期カメラデモ（リアルタイム角度表示のみ） |
