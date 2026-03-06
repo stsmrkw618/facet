@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Facet — Best Angle Scanner v2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400&display=swap');
+
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0A0A0F;--surface:#14141F;--surface2:#1A1A2A;
+    --accent:#E8C872;--accent-soft:rgba(232,200,114,0.12);--accent-glow:rgba(232,200,114,0.25);
+    --text:#F0EDE6;--text-muted:#8A8698;--text-dim:#5A5668;
+    --border:rgba(232,200,114,0.08);
+    --success:#72E8A0;--success-soft:rgba(114,232,160,0.12);
+    --warning:#E8A872;--warning-soft:rgba(232,168,114,0.12);
+    --danger:#E87272;--danger-soft:rgba(232,114,114,0.08);
+    --serif:'Cormorant Garamond',Georgia,serif;
+    --sans:'DM Sans','Helvetica Neue',sans-serif;
+    --mono:'DM Mono',monospace;
+  }
+  body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;top:-30%;right:-20%;width:60vw;height:60vw;border-radius:50%;background:radial-gradient(circle,var(--accent-glow) 0%,transparent 70%);filter:blur(80px);pointer-events:none;opacity:.2;z-index:0}
+
+  .app{position:relative;z-index:1;max-width:480px;margin:0 auto;padding:1.25rem;min-height:100vh;display:flex;flex-direction:column}
+
+  /* Header */
+  .header{text-align:center;margin-bottom:1rem;flex-shrink:0}
+  .header h1{font-family:var(--serif);font-size:1.8rem;font-weight:300;letter-spacing:.15em;color:var(--accent)}
+  .header p{font-size:.72rem;color:var(--text-muted);margin-top:.1rem}
+
+  /* Screens */
+  .screen{display:none;flex:1;flex-direction:column}.screen.active{display:flex}
+
+  /* Loading */
+  #loading-screen{align-items:center;justify-content:center;gap:1.5rem}
+  .spinner{width:44px;height:44px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Buttons */
+  .btn{padding:.8rem 2rem;border-radius:28px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-family:var(--sans);font-size:.82rem;font-weight:500;cursor:pointer;transition:all .3s;letter-spacing:.03em}
+  .btn:hover{background:var(--accent-soft)}.btn:disabled{opacity:.3;cursor:default}
+  .btn.filled{background:var(--accent);color:var(--bg)}.btn.filled:hover{opacity:.9}
+  .btn-sm{padding:.55rem 1.2rem;border-radius:20px;font-size:.72rem;border-width:1px}
+  .btn-ghost{border-color:var(--border);color:var(--text-muted)}.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* Viewfinder */
+  .viewfinder{position:relative;width:100%;aspect-ratio:3/4;border-radius:20px;overflow:hidden;border:2px solid var(--border);background:#111;transition:border-color .4s,box-shadow .4s}
+  #video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  #overlay{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+  .corner{position:absolute;width:22px;height:22px;border-color:var(--accent);border-style:solid;border-width:0;transition:border-color .3s}
+  .corner.tl{top:12px;left:12px;border-top-width:2px;border-left-width:2px;border-radius:4px 0 0 0}
+  .corner.tr{top:12px;right:12px;border-top-width:2px;border-right-width:2px;border-radius:0 4px 0 0}
+  .corner.bl{bottom:12px;left:12px;border-bottom-width:2px;border-left-width:2px;border-radius:0 0 0 4px}
+  .corner.br{bottom:12px;right:12px;border-bottom-width:2px;border-right-width:2px;border-radius:0 0 4px 0}
+
+  /* Timer — centered overlay */
+  .timer-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;pointer-events:none}
+  .timer-ring{position:relative}
+  .timer-ring svg{width:130px;height:130px;transform:rotate(-90deg)}
+  .timer-ring .bg{fill:none;stroke:rgba(160,230,200,.08);stroke-width:2}
+  .timer-ring .fg{fill:none;stroke:url(#timer-grad);stroke-width:2.5;stroke-linecap:round;transition:stroke-dashoffset .3s linear;filter:drop-shadow(0 0 8px rgba(100,220,180,.35))}
+  .timer-ring .fg.urgent{stroke:url(#timer-grad-urgent);filter:drop-shadow(0 0 10px rgba(232,114,114,.4))}
+  .timer-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:var(--serif);font-size:2.6rem;font-weight:300;color:rgba(160,230,200,.8);text-shadow:0 0 18px rgba(100,220,180,.25),0 2px 8px rgba(0,0,0,.5);letter-spacing:.03em}
+  .timer-num.urgent{color:rgba(232,130,130,.85);text-shadow:0 0 18px rgba(232,114,114,.3),0 2px 8px rgba(0,0,0,.5)}
+
+  /* Scan HUD */
+  .hud{margin-top:1rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem}
+  .hud-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.6rem;text-align:center}
+  .hud-label{font-family:var(--mono);font-size:.55rem;letter-spacing:.08em;color:var(--text-dim)}
+  .hud-value{font-family:var(--serif);font-size:1.3rem;font-weight:400;color:var(--accent);margin-top:.1rem}
+  .hud-unit{font-size:.7rem;color:var(--text-muted)}
+
+  /* Coverage map */
+  .coverage-section{margin-top:1rem}
+  .coverage-label{font-size:.6rem;font-weight:600;letter-spacing:.1em;color:var(--text-dim);margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center}
+  .coverage-map{position:relative;width:100%;aspect-ratio:2/1;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .coverage-map canvas{width:100%;height:100%}
+  .coverage-axes{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+  .axis-label{position:absolute;font-size:.5rem;color:var(--text-dim);font-family:var(--mono)}
+
+  /* Guidance */
+  .guidance{margin-top:.8rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.7rem 1rem;text-align:center;font-size:.8rem;color:var(--text-muted);min-height:42px;display:flex;align-items:center;justify-content:center;transition:all .3s}
+
+  /* ═══ Results ═══ */
+  .result-header{text-align:center;margin-bottom:1.25rem}
+  .result-header h2{font-family:var(--serif);font-size:1.6rem;font-weight:300;color:var(--accent)}
+  .result-header p{font-size:.78rem;color:var(--text-muted);margin-top:.15rem}
+
+  .result-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:.7rem;overflow:hidden;transition:border-color .3s;cursor:pointer}
+  .result-card:hover{border-color:rgba(232,200,114,.2)}
+  .result-card.best{border-color:var(--accent)}
+
+  .rc-header{padding:1rem 1.1rem;display:flex;align-items:center;gap:.75rem}
+  .rc-rank{font-family:var(--serif);font-weight:400;color:var(--text-dim);min-width:36px;font-size:1rem}
+  .result-card.best .rc-rank{color:var(--accent);font-size:1.2rem}
+  .rc-thumb{width:48px;height:64px;border-radius:8px;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
+  .rc-info{flex:1}
+  .rc-name{font-weight:600;font-size:.88rem}
+  .rc-detail{font-size:.68rem;color:var(--text-muted);margin-top:.05rem}
+  .rc-score{font-family:var(--serif);font-size:1.7rem;font-weight:300}
+  .result-card.best .rc-score{color:var(--accent)}
+
+  .rc-body{max-height:0;overflow:hidden;transition:max-height .4s ease,padding .4s ease;padding:0 1.1rem}
+  .result-card.expanded .rc-body{max-height:600px;padding:0 1.1rem 1.1rem}
+
+  .reason-label{font-size:.58rem;font-weight:600;letter-spacing:.1em;color:var(--text-dim);margin-bottom:.4rem;padding-top:.75rem;border-top:1px solid var(--border)}
+  .reason-item{font-size:.76rem;color:var(--text-muted);padding:.3rem 0 .3rem .7rem;border-left:2px solid var(--accent-soft);margin-bottom:.2rem;line-height:1.5}
+  .scene-tags{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.6rem}
+  .scene-tag{font-size:.6rem;padding:.18rem .55rem;border-radius:16px;background:var(--accent-soft);color:var(--accent)}
+
+  /* Heatmap in results */
+  .heatmap-result{margin-top:.75rem}
+  .heatmap-result canvas{width:100%;border-radius:8px;border:1px solid var(--border)}
+
+  /* Caution */
+  .caution-card{background:var(--danger-soft);border:1px solid rgba(232,114,114,.15);border-radius:12px;padding:.9rem 1.1rem;margin-bottom:.8rem}
+  .caution-title{font-size:.65rem;font-weight:600;letter-spacing:.1em;color:var(--danger);margin-bottom:.3rem}
+  .caution-text{font-size:.75rem;color:var(--text-muted);line-height:1.6}
+
+  .result-actions{margin-top:1.25rem;display:flex;gap:.65rem;justify-content:center;flex-wrap:wrap;padding-bottom:2rem}
+
+  /* History screen */
+  .history-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem}
+  .history-header h2{font-family:var(--serif);font-size:1.4rem;font-weight:300;color:var(--accent);flex:1}
+  .history-back{background:none;border:1px solid var(--border);color:var(--text-muted);font-size:.72rem;padding:.35rem .75rem;border-radius:8px;cursor:pointer;font-family:var(--sans)}
+  .history-back:hover{border-color:var(--accent);color:var(--accent)}
+  .history-empty{text-align:center;color:var(--text-dim);font-size:.82rem;margin-top:3rem}
+  .history-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;margin-bottom:.6rem;cursor:pointer;transition:border-color .3s}
+  .history-item:hover{border-color:rgba(232,200,114,.2)}
+  .history-item-top{display:flex;align-items:center;gap:.7rem}
+  .history-item-thumb{width:40px;height:54px;border-radius:6px;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
+  .history-item-info{flex:1}
+  .history-item-date{font-size:.72rem;color:var(--text-muted)}
+  .history-item-best{font-weight:600;font-size:.82rem;margin-top:.1rem}
+  .history-item-score{font-family:var(--serif);font-size:1.4rem;font-weight:300;color:var(--accent)}
+  .history-item-meta{font-size:.62rem;color:var(--text-dim);margin-top:.25rem}
+  .history-item-actions{display:flex;gap:.5rem;margin-top:.5rem;justify-content:flex-end}
+  .history-delete{background:none;border:none;color:var(--text-dim);font-size:.65rem;cursor:pointer;padding:.2rem .4rem}
+  .history-delete:hover{color:var(--danger)}
+
+  /* Practice mode */
+  .practice-target{text-align:center;margin-bottom:.6rem}
+  .practice-target-name{font-family:var(--serif);font-size:1.1rem;color:var(--accent);font-weight:300}
+  .practice-target-angle{font-size:.65rem;color:var(--text-dim);margin-top:.1rem}
+  .practice-viewfinder{position:relative;width:100%;aspect-ratio:4/3;border-radius:14px;overflow:hidden;background:#000}
+  .practice-viewfinder video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  .practice-viewfinder canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+  .practice-guide{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;text-align:center}
+  .practice-ring{width:120px;height:120px;border-radius:50%;border:3px solid var(--text-dim);display:flex;align-items:center;justify-content:center;transition:border-color .3s,box-shadow .3s}
+  .practice-ring.close{border-color:var(--warning)}
+  .practice-ring.locked{border-color:var(--success);box-shadow:0 0 20px rgba(114,232,160,.3)}
+  .practice-arrow{font-size:2rem;line-height:1;color:var(--text-muted);transition:opacity .2s}
+  .practice-arrow.hidden{opacity:0}
+  .practice-status{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:.72rem;color:var(--text-muted);background:rgba(10,10,15,.7);padding:.3rem .8rem;border-radius:8px;white-space:nowrap;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .practice-status.locked{color:var(--success);font-weight:600}
+  .practice-hud{display:flex;justify-content:space-between;margin-top:.5rem;padding:0 .25rem}
+  .practice-hud-item{text-align:center}
+  .practice-hud-label{font-size:.55rem;color:var(--text-dim);letter-spacing:.05em}
+  .practice-hud-value{font-family:var(--mono);font-size:.85rem;margin-top:.05rem}
+  .practice-actions{display:flex;gap:.65rem;justify-content:center;margin-top:.75rem}
+
+  /* Image lightbox modal */
+  .lightbox-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s ease;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .lightbox-overlay.active{opacity:1;pointer-events:auto}
+  .lightbox-overlay img{max-width:90vw;max-height:85vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.6);transform:scale(.9);transition:transform .25s ease}
+  .lightbox-overlay.active img{transform:scale(1)}
+  .lightbox-close{position:absolute;top:1rem;right:1rem;width:36px;height:36px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+  /* Animations */
+  @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes fadeInUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+  .fade-in{animation:fadeIn .5s ease both}
+  .fade-in-up{animation:fadeInUp .6s ease both}
+</style>
+</head>
+<body>
+
+<!-- Lightbox modal for thumbnail zoom -->
+<div class="lightbox-overlay" id="lightbox-overlay" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<div class="app">
+  <div class="header">
+    <h1>FACET</h1>
+    <p id="header-sub">あなたのベストアングルを見つける</p>
+  </div>
+
+  <!-- ═══ LOADING ═══ -->
+  <div class="screen active" id="loading-screen">
+    <div id="loader-content" style="text-align:center;">
+      <div class="spinner" style="margin:0 auto 1rem;"></div>
+      <div style="font-size:.82rem;color:var(--text-muted);">
+        MediaPipeモデルを読み込み中...
+        <div style="font-size:.68rem;color:var(--text-dim);margin-top:.2rem;">初回は数秒かかります</div>
+      </div>
+    </div>
+    <div id="glasses-toggle" style="display:none;margin-top:1.2rem;align-self:center;text-align:center;">
+      <button id="glasses-btn" class="btn btn-sm btn-ghost" style="font-size:.72rem;padding:.35rem .9rem;">
+        メガネなし
+      </button>
+      <div style="font-size:.58rem;color:var(--text-dim);margin-top:.25rem;">タップで切り替え</div>
+    </div>
+    <button class="btn" id="start-btn" disabled style="margin-top:1rem;align-self:center;">
+      スキャンを開始する
+    </button>
+    <button class="btn btn-sm btn-ghost" id="history-btn" style="margin-top:.5rem;align-self:center;display:none;" onclick="showHistory()">
+      過去の結果を見る
+    </button>
+  </div>
+
+  <!-- ═══ HISTORY ═══ -->
+  <div class="screen" id="history-screen">
+    <div class="history-header">
+      <h2>History</h2>
+      <button class="history-back" onclick="showScreen('loading')">戻る</button>
+    </div>
+    <div id="history-list"></div>
+  </div>
+
+  <!-- ═══ SCAN ═══ -->
+  <div class="screen" id="scan-screen">
+    <div class="viewfinder" id="viewfinder">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="overlay"></canvas>
+      <div class="corner tl"></div><div class="corner tr"></div>
+      <div class="corner bl"></div><div class="corner br"></div>
+      <!-- Timer -->
+      <div class="timer-overlay">
+        <div class="timer-ring">
+          <svg viewBox="0 0 130 130">
+            <defs>
+              <linearGradient id="timer-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="rgba(80,220,170,.9)"/>
+                <stop offset="50%" stop-color="rgba(100,200,200,.7)"/>
+                <stop offset="100%" stop-color="rgba(140,230,160,.85)"/>
+              </linearGradient>
+              <linearGradient id="timer-grad-urgent" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="rgba(232,130,130,.9)"/>
+                <stop offset="100%" stop-color="rgba(232,100,100,.7)"/>
+              </linearGradient>
+            </defs>
+            <circle class="bg" cx="65" cy="65" r="56"></circle>
+            <circle class="fg" id="timer-circle" cx="65" cy="65" r="56"
+              stroke-dasharray="351.9" stroke-dashoffset="0"></circle>
+          </svg>
+          <div class="timer-num" id="timer-num">30</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live angle HUD -->
+    <div class="hud">
+      <div class="hud-card">
+        <div class="hud-label">YAW</div>
+        <div class="hud-value" id="h-yaw">0<span class="hud-unit">°</span></div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-label">PITCH</div>
+        <div class="hud-value" id="h-pitch">0<span class="hud-unit">°</span></div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-label">SAMPLES</div>
+        <div class="hud-value" id="h-samples">0</div>
+      </div>
+    </div>
+
+    <!-- Coverage heatmap -->
+    <div class="coverage-section">
+      <div class="coverage-label">
+        <span>ANGLE COVERAGE MAP</span>
+        <span id="coverage-pct" style="color:var(--accent)">0%</span>
+      </div>
+      <div class="coverage-map">
+        <canvas id="heatmap-canvas"></canvas>
+        <div class="coverage-axes">
+          <span class="axis-label" style="top:2px;left:50%;transform:translateX(-50%)">上</span>
+          <span class="axis-label" style="bottom:2px;left:50%;transform:translateX(-50%)">下</span>
+          <span class="axis-label" style="left:4px;top:50%;transform:translateY(-50%)">左</span>
+          <span class="axis-label" style="right:4px;top:50%;transform:translateY(-50%)">右</span>
+          <span class="axis-label" style="top:50%;left:50%;transform:translate(-50%,-50%);color:var(--accent);font-size:.55rem">●</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="guidance" id="guidance">ゆっくり顔を動かしてください</div>
+  </div>
+
+  <!-- ═══ ANALYZING ═══ -->
+  <div class="screen" id="analyzing-screen" style="align-items:center;justify-content:center;gap:1rem;text-align:center;">
+    <div class="spinner" style="margin:0 auto;"></div>
+    <h2 style="font-family:var(--serif);font-size:1.3rem;font-weight:300;color:var(--accent);">分析中...</h2>
+    <div id="analyze-steps" style="margin-top:1rem;text-align:left;display:inline-block;"></div>
+  </div>
+
+  <!-- ═══ RESULTS ═══ -->
+  <div class="screen" id="results-screen">
+    <div class="result-header fade-in-up">
+      <h2>Your Best Angles</h2>
+      <p id="result-sub">--サンプルから分析</p>
+    </div>
+    <div id="results-container"></div>
+    <div id="caution-container"></div>
+    <div class="result-actions" id="result-actions"></div>
+  </div>
+
+  <!-- ═══ PRACTICE ═══ -->
+  <div class="screen" id="practice-screen">
+    <div class="practice-target">
+      <div class="practice-target-name" id="practice-target-name"></div>
+      <div class="practice-target-angle" id="practice-target-angle"></div>
+    </div>
+    <div class="practice-viewfinder">
+      <video id="practice-video" autoplay playsinline></video>
+      <canvas id="practice-overlay"></canvas>
+      <div class="practice-guide" id="practice-guide">
+        <div class="practice-ring" id="practice-ring">
+          <div class="practice-arrow" id="practice-arrow"></div>
+        </div>
+      </div>
+      <div class="practice-status" id="practice-status">ターゲットに合わせてください</div>
+    </div>
+    <div class="practice-hud">
+      <div class="practice-hud-item">
+        <div class="practice-hud-label">YAW</div>
+        <div class="practice-hud-value" id="p-yaw">0°</div>
+      </div>
+      <div class="practice-hud-item">
+        <div class="practice-hud-label">PITCH</div>
+        <div class="practice-hud-value" id="p-pitch">0°</div>
+      </div>
+      <div class="practice-hud-item">
+        <div class="practice-hud-label">距離</div>
+        <div class="practice-hud-value" id="p-dist">--</div>
+      </div>
+    </div>
+    <div class="practice-actions">
+      <button class="btn btn-sm btn-ghost" id="practice-back">結果に戻る</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// IndexedDB — History
+// ══════════════════════════════════════════
+const DB_NAME = 'facet-history';
+const DB_VERSION = 1;
+const STORE_NAME = 'results';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+const HISTORY_MAX = 20; // 最大保存件数
+
+function shrinkSnapshot(dataUrl, maxW = 240) {
+  if (!dataUrl) return Promise.resolve(null);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(maxW / img.width, 1);
+      const w = Math.round(img.width * ratio);
+      const h = Math.round(img.height * ratio);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.5));
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+async function saveResultToDB(results) {
+  const db = await openDB();
+  // Shrink snapshots before saving
+  const rankedWithSmall = await Promise.all(results.ranked.map(async r => ({
+    name: r.name, yaw: r.yaw, pitch: r.pitch,
+    score: r.score, sampleCount: r.sampleCount,
+    reasons: r.reasons, scenes: r.scenes,
+    snapshot: await shrinkSnapshot(r.snapshot)
+  })));
+  const worstSnap = results.worst ? await shrinkSnapshot(results.worst.snapshot) : null;
+  const record = {
+    timestamp: new Date().toISOString(),
+    totalSamples: results.totalSamples,
+    totalBins: results.totalBins,
+    glasses: wearsGlasses,
+    ranked: rankedWithSmall,
+    worst: results.worst ? {
+      name: results.worst.name, yaw: results.worst.yaw, pitch: results.worst.pitch,
+      score: results.worst.score, snapshot: worstSnap
+    } : null
+  };
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).add(record);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  // Prune old entries beyond HISTORY_MAX
+  const all = await getAllResults();
+  if (all.length > HISTORY_MAX) {
+    const toDelete = all.slice(HISTORY_MAX);
+    const tx2 = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx2.objectStore(STORE_NAME);
+    toDelete.forEach(r => store.delete(r.id));
+  }
+}
+
+async function getAllResults() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).getAll();
+    req.onsuccess = () => resolve(req.result.reverse());
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deleteResult(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function showHistory() {
+  showScreen('history');
+  const list = document.getElementById('history-list');
+  list.innerHTML = '<div style="text-align:center;color:var(--text-dim);font-size:.8rem;">読み込み中...</div>';
+  const records = await getAllResults();
+  if (records.length === 0) {
+    list.innerHTML = '<div class="history-empty">まだ履歴がありません。<br>スキャンすると自動で保存されます。</div>';
+    return;
+  }
+  list.innerHTML = records.map(r => {
+    const d = new Date(r.timestamp);
+    const dateStr = `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+    const best = r.ranked[0];
+    const thumbHtml = best?.snapshot
+      ? `<img class="history-item-thumb" src="${best.snapshot}" alt="">`
+      : '';
+    return `
+      <div class="history-item" onclick="showHistoryResult(${r.id})">
+        <div class="history-item-top">
+          ${thumbHtml}
+          <div class="history-item-info">
+            <div class="history-item-date">${dateStr}</div>
+            <div class="history-item-best">${best ? best.name : '---'}</div>
+            <div class="history-item-meta">${r.totalSamples}サンプル / ${r.ranked.length}アングル${r.glasses ? ' / メガネあり' : ''}</div>
+          </div>
+          <div class="history-item-score">${best ? best.score : '--'}</div>
+        </div>
+        <div class="history-item-actions">
+          <button class="history-delete" onclick="event.stopPropagation();deleteHistoryItem(${r.id})">削除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function deleteHistoryItem(id) {
+  await deleteResult(id);
+  showHistory();
+}
+
+function showHistoryResult(id) {
+  getAllResults().then(records => {
+    const r = records.find(rec => rec.id === id);
+    if (!r) return;
+    // Re-render the result screen with saved data
+    showScreen('results');
+    const glLabel = r.glasses ? ' / メガネあり' : '';
+    document.getElementById('header-sub').textContent = `${new Date(r.timestamp).toLocaleDateString('ja-JP')} の結果`;
+    document.getElementById('result-sub').textContent = `${r.totalSamples}サンプルから分析${glLabel}`;
+    renderResults({ ranked: r.ranked, worst: r.worst, totalSamples: r.totalSamples, totalBins: r.totalBins });
+  });
+}
+
+async function updateHistoryButton() {
+  const records = await getAllResults();
+  const btn = document.getElementById('history-btn');
+  if (records.length > 0) btn.style.display = '';
+  else btn.style.display = 'none';
+}
+
+function openLightbox(src) {
+  const overlay = document.getElementById('lightbox-overlay');
+  document.getElementById('lightbox-img').src = src;
+  overlay.classList.add('active');
+}
+function closeLightbox() {
+  document.getElementById('lightbox-overlay').classList.remove('active');
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
+</script>
+<script type="module">
+import { FaceLandmarker, FilesetResolver } from
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
+
+// ══════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════
+const SCAN_DURATION = 30;        // seconds
+const SAMPLE_INTERVAL = 5;       // sample every N frames
+const SMOOTH = 0.35;
+const YAW_RANGE = 40;            // ±40° coverage
+const PITCH_RANGE = 30;          // ±30° coverage
+const HEATMAP_COLS = 20;         // grid resolution
+const HEATMAP_ROWS = 15;
+const TOP_N_RESULTS = 5;         // show top 5
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+let wearsGlasses = false;
+let faceLandmarker, video, canvas, ctx;
+let running = false, lastTs = -1;
+let smoothYaw = 0, smoothPitch = 0, smoothRoll = 0;
+let frameCount = 0;
+let scanStartTime = 0;
+let samples = [];       // { yaw, pitch, roll, symmetry, landmarks, blendshapes, snapshot? }
+let heatmapData = [];   // 2D grid of sample counts
+let heatmapCanvas, heatmapCtx;
+
+// DOM
+const startBtn = document.getElementById('start-btn');
+
+// ══════════════════════════════════════════
+// PRACTICE MODE
+// ══════════════════════════════════════════
+let practiceRunning = false;
+let practiceTarget = null;     // { yaw, pitch, name }
+let practiceVideo = null;
+let practiceCanvas = null;
+let practiceCtx = null;
+let practiceSmYaw = 0, practiceSmPitch = 0;
+const PRACTICE_THRESHOLD = 5;  // degrees — "locked" when within this
+const PRACTICE_CLOSE = 12;     // degrees — "close" zone
+
+async function startPractice(angleData) {
+  practiceTarget = { yaw: angleData.yaw, pitch: angleData.pitch, name: angleData.name };
+  running = false; // stop scan loop if running
+
+  document.getElementById('practice-target-name').textContent = practiceTarget.name;
+  document.getElementById('practice-target-angle').textContent =
+    `Yaw ${practiceTarget.yaw > 0 ? '+' : ''}${practiceTarget.yaw}° / Pitch ${practiceTarget.pitch > 0 ? '+' : ''}${practiceTarget.pitch}°`;
+
+  practiceVideo = document.getElementById('practice-video');
+  practiceCanvas = document.getElementById('practice-overlay');
+  practiceCtx = practiceCanvas.getContext('2d');
+
+  // Reuse existing stream or create new one
+  if (!practiceVideo.srcObject) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      practiceVideo.srcObject = stream;
+      await new Promise(r => {
+        if (practiceVideo.readyState >= 2) r();
+        else practiceVideo.addEventListener('loadeddata', r, { once: true });
+      });
+    } catch (err) {
+      alert('カメラアクセスが必要です。');
+      return;
+    }
+  }
+  practiceCanvas.width = practiceVideo.videoWidth;
+  practiceCanvas.height = practiceVideo.videoHeight;
+
+  practiceSmYaw = 0;
+  practiceSmPitch = 0;
+
+  showScreen('practice');
+  document.getElementById('header-sub').textContent = '練習モード';
+
+  practiceRunning = true;
+  practiceLoop();
+}
+
+function stopPractice() {
+  practiceRunning = false;
+  showScreen('results');
+  document.getElementById('header-sub').textContent = '分析完了';
+}
+
+function practiceLoop() {
+  if (!practiceRunning) return;
+  const now = performance.now();
+
+  const results = faceLandmarker.detectForVideo(practiceVideo, now);
+  practiceCtx.clearRect(0, 0, practiceCanvas.width, practiceCanvas.height);
+
+  const statusEl = document.getElementById('practice-status');
+  const ringEl = document.getElementById('practice-ring');
+  const arrowEl = document.getElementById('practice-arrow');
+
+  if (!results.faceLandmarks?.length) {
+    statusEl.textContent = '顔が見つかりません...';
+    statusEl.className = 'practice-status';
+    ringEl.className = 'practice-ring';
+    arrowEl.textContent = '';
+    requestAnimationFrame(practiceLoop);
+    return;
+  }
+
+  const landmarks = results.faceLandmarks[0];
+
+  // Get angles
+  let yaw = 0, pitch = 0;
+  if (results.facialTransformationMatrixes?.length > 0) {
+    const m = results.facialTransformationMatrixes[0].data;
+    const a = matrixToEuler(m);
+    yaw = a.yaw; pitch = a.pitch;
+  } else {
+    const a = landmarkAngles(landmarks);
+    yaw = a.yaw; pitch = a.pitch;
+  }
+  practiceSmYaw += (yaw - practiceSmYaw) * SMOOTH;
+  practiceSmPitch += (pitch - practiceSmPitch) * SMOOTH;
+
+  const dy = practiceTarget.yaw - practiceSmYaw;
+  const dp = practiceTarget.pitch - practiceSmPitch;
+  const distance = Math.sqrt(dy * dy + dp * dp);
+
+  // Update HUD
+  document.getElementById('p-yaw').textContent = `${Math.round(practiceSmYaw)}°`;
+  document.getElementById('p-pitch').textContent = `${Math.round(practiceSmPitch)}°`;
+  document.getElementById('p-dist').textContent = `${Math.round(distance)}°`;
+
+  // Direction arrow
+  if (distance > PRACTICE_THRESHOLD) {
+    const arrows = [];
+    if (dy > 3) arrows.push('←');
+    else if (dy < -3) arrows.push('→');
+    if (dp > 3) arrows.push('↑');
+    else if (dp < -3) arrows.push('↓');
+    arrowEl.textContent = arrows.join(' ');
+    arrowEl.className = 'practice-arrow';
+  } else {
+    arrowEl.textContent = '✓';
+    arrowEl.className = 'practice-arrow';
+  }
+
+  // Ring & status
+  if (distance <= PRACTICE_THRESHOLD) {
+    ringEl.className = 'practice-ring locked';
+    statusEl.textContent = 'ベストアングル!';
+    statusEl.className = 'practice-status locked';
+  } else if (distance <= PRACTICE_CLOSE) {
+    ringEl.className = 'practice-ring close';
+    statusEl.textContent = 'もう少し...';
+    statusEl.className = 'practice-status';
+  } else {
+    ringEl.className = 'practice-ring';
+    statusEl.textContent = '矢印の方向へ顔を向けてください';
+    statusEl.className = 'practice-status';
+  }
+
+  // Color the distance HUD
+  const distEl = document.getElementById('p-dist');
+  if (distance <= PRACTICE_THRESHOLD) distEl.style.color = 'var(--success)';
+  else if (distance <= PRACTICE_CLOSE) distEl.style.color = 'var(--warning)';
+  else distEl.style.color = 'var(--text)';
+
+  requestAnimationFrame(practiceLoop);
+}
+
+document.getElementById('practice-back').addEventListener('click', stopPractice);
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+async function initMediaPipe() {
+  try {
+    const fs = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
+    );
+    faceLandmarker = await FaceLandmarker.createFromOptions(fs, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        delegate: "GPU"
+      },
+      outputFaceBlendshapes: true,
+      outputFacialTransformationMatrixes: true,
+      runningMode: "VIDEO",
+      numFaces: 1
+    });
+    document.getElementById('loader-content').innerHTML = `
+      <div style="font-size:1.4rem;color:var(--success);margin-bottom:.4rem;">✓</div>
+      <div style="font-size:.82rem;color:var(--text-muted);">準備完了！</div>
+    `;
+    startBtn.disabled = false;
+    document.getElementById('glasses-toggle').style.display = '';
+    updateHistoryButton();
+  } catch (err) {
+    document.getElementById('loader-content').innerHTML = `
+      <div style="color:var(--danger);font-size:.82rem;">読み込みエラー<br>
+      <span style="font-size:.68rem;color:var(--text-dim)">${err.message}</span></div>`;
+  }
+}
+
+// ══════════════════════════════════════════
+// CAMERA START
+// ══════════════════════════════════════════
+async function startCamera() {
+  video = document.getElementById('video');
+  canvas = document.getElementById('overlay');
+  ctx = canvas.getContext('2d');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    video.srcObject = stream;
+    await new Promise(r => {
+      if (video.readyState >= 2) r();
+      else video.addEventListener('loadeddata', r, { once: true });
+    });
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Init heatmap
+    heatmapCanvas = document.getElementById('heatmap-canvas');
+    heatmapCanvas.width = HEATMAP_COLS * 4;
+    heatmapCanvas.height = HEATMAP_ROWS * 4;
+    heatmapCtx = heatmapCanvas.getContext('2d');
+    heatmapData = Array.from({ length: HEATMAP_ROWS }, () => new Float32Array(HEATMAP_COLS));
+
+    samples = [];
+    frameCount = 0;
+    scanStartTime = performance.now();
+
+    showScreen('scan');
+    document.getElementById('header-sub').textContent = 'スキャン中...';
+
+    running = true;
+    scanLoop();
+  } catch (err) {
+    console.error('Camera error:', err);
+    alert('カメラアクセスが必要です: ' + err.message);
+  }
+}
+
+// ══════════════════════════════════════════
+// MAIN SCAN LOOP
+// ══════════════════════════════════════════
+function scanLoop() {
+  if (!running) return;
+  const now = performance.now();
+  if (now === lastTs) { requestAnimationFrame(scanLoop); return; }
+  lastTs = now;
+
+  // Timer
+  const elapsed = (now - scanStartTime) / 1000;
+  const remaining = Math.max(0, SCAN_DURATION - elapsed);
+  updateTimer(remaining);
+
+  if (remaining <= 0) {
+    running = false;
+    finishScan();
+    return;
+  }
+
+  const results = faceLandmarker.detectForVideo(video, now);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!results.faceLandmarks?.length) {
+    document.getElementById('guidance').textContent = '顔が見つかりません...';
+    requestAnimationFrame(scanLoop);
+    return;
+  }
+
+  const landmarks = results.faceLandmarks[0];
+  drawFaceMesh(landmarks);
+
+  // Angles
+  let yaw = 0, pitch = 0, roll = 0;
+  if (results.facialTransformationMatrixes?.length > 0) {
+    const m = results.facialTransformationMatrixes[0].data;
+    const a = matrixToEuler(m);
+    yaw = a.yaw; pitch = a.pitch; roll = a.roll;
+  } else {
+    const a = landmarkAngles(landmarks);
+    yaw = a.yaw; pitch = a.pitch; roll = a.roll;
+  }
+  smoothYaw += (yaw - smoothYaw) * SMOOTH;
+  smoothPitch += (pitch - smoothPitch) * SMOOTH;
+  smoothRoll += (roll - smoothRoll) * SMOOTH;
+
+  // Update HUD
+  document.getElementById('h-yaw').innerHTML = `${Math.round(smoothYaw)}<span class="hud-unit">°</span>`;
+  document.getElementById('h-pitch').innerHTML = `${Math.round(smoothPitch)}<span class="hud-unit">°</span>`;
+
+  // Sample every N frames
+  frameCount++;
+  if (frameCount % SAMPLE_INTERVAL === 0) {
+    const sym = analyzeSymmetry(landmarks);
+    const blendshapes = results.faceBlendshapes?.[0]?.categories || [];
+
+    // Take snapshot when entering a new angle zone or every 5th sample
+    let snapshot = null;
+    const BIN_SIZE = 5;
+    const curBinKey = `${Math.round(smoothYaw/BIN_SIZE)*BIN_SIZE},${Math.round(smoothPitch/BIN_SIZE)*BIN_SIZE}`;
+    const binHasSnapshot = samples.some(s => {
+      const sk = `${Math.round(s.yaw/BIN_SIZE)*BIN_SIZE},${Math.round(s.pitch/BIN_SIZE)*BIN_SIZE}`;
+      return sk === curBinKey && s.snapshot;
+    });
+
+    if (!binHasSnapshot || samples.length % 5 === 0) {
+      const tc = document.createElement('canvas');
+      tc.width = video.videoWidth; tc.height = video.videoHeight;
+      const tctx = tc.getContext('2d');
+      tctx.translate(tc.width, 0); tctx.scale(-1, 1);
+      tctx.drawImage(video, 0, 0);
+      snapshot = tc.toDataURL('image/jpeg', 0.6);
+    }
+
+    samples.push({
+      yaw: smoothYaw, pitch: smoothPitch, roll: smoothRoll,
+      symmetry: sym,
+      landmarks: landmarks.map(l => ({ x: l.x, y: l.y, z: l.z })),
+      blendshapes,
+      snapshot,
+      time: elapsed
+    });
+
+    // Update heatmap
+    const col = Math.floor(((smoothYaw + YAW_RANGE) / (YAW_RANGE * 2)) * HEATMAP_COLS);
+    const row = Math.floor(((smoothPitch + PITCH_RANGE) / (PITCH_RANGE * 2)) * HEATMAP_ROWS);
+    if (col >= 0 && col < HEATMAP_COLS && row >= 0 && row < HEATMAP_ROWS) {
+      heatmapData[row][col] += 1;
+    }
+    drawHeatmap();
+
+    document.getElementById('h-samples').textContent = samples.length;
+
+    // Coverage %
+    let covered = 0;
+    for (let r = 0; r < HEATMAP_ROWS; r++)
+      for (let c = 0; c < HEATMAP_COLS; c++)
+        if (heatmapData[r][c] > 0) covered++;
+    const pct = Math.round((covered / (HEATMAP_ROWS * HEATMAP_COLS)) * 100);
+    document.getElementById('coverage-pct').textContent = pct + '%';
+  }
+
+  // Guidance
+  updateGuidance(smoothYaw, smoothPitch, elapsed);
+
+  requestAnimationFrame(scanLoop);
+}
+
+function updateTimer(remaining) {
+  const sec = Math.ceil(remaining);
+  const numEl = document.getElementById('timer-num');
+  numEl.textContent = sec;
+  numEl.className = sec <= 5 ? 'timer-num urgent' : 'timer-num';
+  const circ = 351.9; // 2 * PI * 56
+  const offset = circ * (1 - remaining / SCAN_DURATION);
+  const circleEl = document.getElementById('timer-circle');
+  circleEl.style.strokeDashoffset = offset;
+  circleEl.setAttribute('class', sec <= 5 ? 'fg urgent' : 'fg');
+}
+
+function updateGuidance(yaw, pitch, elapsed) {
+  const g = document.getElementById('guidance');
+  const absYaw = Math.abs(yaw);
+  const absPitch = Math.abs(pitch);
+
+  if (elapsed < 3) {
+    g.textContent = '顔を認識しました。ゆっくり色んな方向を向いてください';
+    return;
+  }
+
+  // Check coverage gaps
+  const leftCovered = samples.some(s => s.yaw > 15);
+  const rightCovered = samples.some(s => s.yaw < -15);
+  const upCovered = samples.some(s => s.pitch < -10);
+  const downCovered = samples.some(s => s.pitch > 10);
+
+  const gaps = [];
+  if (!leftCovered) gaps.push('左');
+  if (!rightCovered) gaps.push('右');
+  if (!upCovered) gaps.push('上');
+  if (!downCovered) gaps.push('下');
+
+  if (gaps.length > 0 && elapsed > 8) {
+    g.innerHTML = `<span style="color:var(--warning)">まだ${gaps.join('・')}方向のデータが足りません</span>`;
+  } else if (elapsed > 20) {
+    g.textContent = 'いい感じです！あと少し...';
+  } else {
+    g.textContent = 'ゆっくり左右上下に顔を動かしてください';
+  }
+}
+
+function drawHeatmap() {
+  const cw = heatmapCanvas.width;
+  const ch = heatmapCanvas.height;
+  const cellW = cw / HEATMAP_COLS;
+  const cellH = ch / HEATMAP_ROWS;
+
+  // Find max for normalization
+  let maxVal = 1;
+  for (let r = 0; r < HEATMAP_ROWS; r++)
+    for (let c = 0; c < HEATMAP_COLS; c++)
+      if (heatmapData[r][c] > maxVal) maxVal = heatmapData[r][c];
+
+  heatmapCtx.clearRect(0, 0, cw, ch);
+
+  for (let r = 0; r < HEATMAP_ROWS; r++) {
+    for (let c = 0; c < HEATMAP_COLS; c++) {
+      const v = heatmapData[r][c] / maxVal;
+      if (v > 0) {
+        const h = 45 - v * 30; // gold to warm
+        const s = 70 + v * 20;
+        const l = 15 + v * 40;
+        heatmapCtx.fillStyle = `hsl(${h}, ${s}%, ${l}%)`;
+      } else {
+        heatmapCtx.fillStyle = 'rgba(255,255,255,0.02)';
+      }
+      heatmapCtx.fillRect(c * cellW, r * cellH, cellW, cellH);
+    }
+  }
+}
+
+// ══════════════════════════════════════════
+// FINISH SCAN → ANALYZE
+// ══════════════════════════════════════════
+async function finishScan() {
+  showScreen('analyzing');
+  document.getElementById('header-sub').textContent = '分析中...';
+
+  const steps = [
+    `${samples.length}サンプルのデータを整理中...`,
+    '顎ライン＆小顔効果を評価中...',
+    '目の大きさ＆立体感を分析中...',
+    '笑顔の美しさ＆対称性を解析中...',
+    'ベストアングルを特定中...',
+  ];
+
+  const stepsEl = document.getElementById('analyze-steps');
+  stepsEl.innerHTML = steps.map((s, i) =>
+    `<div style="display:flex;align-items:center;gap:.6rem;padding:.4rem 0;font-size:.78rem;color:var(--text-dim);transition:color .3s" id="as-${i}">
+      <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:.55rem;flex-shrink:0">${i+1}</div>
+      <span>${s}</span>
+    </div>`
+  ).join('');
+
+  for (let i = 0; i < steps.length; i++) {
+    const el = document.getElementById(`as-${i}`);
+    el.style.color = 'var(--text)';
+    await sleep(500 + Math.random() * 400);
+    el.style.color = 'var(--success)';
+    el.querySelector('div').style.background = 'var(--success)';
+    el.querySelector('div').style.color = 'var(--bg)';
+    el.querySelector('div').style.borderColor = 'var(--success)';
+  }
+
+  await sleep(300);
+  const results = analyzeSamples();
+  showResults(results);
+}
+
+// ══════════════════════════════════════════
+// ANALYSIS ENGINE v3
+// ══════════════════════════════════════════
+// Key improvements:
+//   1. Relative scoring: frontal = baseline, each angle scored by improvement/decline
+//   2. Sigmoid stretching: amplify differences so rankings are clear
+//   3. Data-driven reasons: cite actual measurements ("顔幅が12%スリムに")
+
+function analyzeSamples() {
+  if (samples.length === 0) return { ranked: [], worst: null };
+
+  const BIN_SIZE = 5;
+  const bins = {};
+  for (const s of samples) {
+    const by = Math.round(s.yaw / BIN_SIZE) * BIN_SIZE;
+    const bp = Math.round(s.pitch / BIN_SIZE) * BIN_SIZE;
+    const key = `${by},${bp}`;
+    if (!bins[key]) bins[key] = { yaw: by, pitch: bp, samples: [] };
+    bins[key].samples.push(s);
+  }
+
+  // Compute metrics for all bins
+  const allBins = Object.values(bins).filter(b => b.samples.length >= 2);
+  if (allBins.length === 0) return { ranked: [], worst: null };
+
+  const binData = allBins.map(bin => {
+    const metrics = computeMetrics(bin);
+    const rawMetrics = computeRawMeasurements(bin);
+    const snapshotSample = bin.samples.find(s => s.snapshot) || bin.samples[0];
+    return { bin, metrics, rawMetrics, snapshot: snapshotSample.snapshot || null };
+  });
+
+  // Find frontal baseline (closest to yaw=0, pitch=0)
+  const frontal = binData.reduce((best, d) => {
+    const dist = Math.abs(d.bin.yaw) + Math.abs(d.bin.pitch);
+    const bestDist = Math.abs(best.bin.yaw) + Math.abs(best.bin.pitch);
+    return dist < bestDist ? d : best;
+  });
+
+  // Compute raw score for each bin (pass frontal metrics for relative evaluation)
+  const rawScores = binData.map(d => ({
+    ...d,
+    rawScore: computeRawScore(d.metrics, frontal.metrics)
+  }));
+
+  // Find min/max raw scores for normalization
+  const scores = rawScores.map(d => d.rawScore);
+  const minScore = Math.min(...scores);
+  const maxScore = Math.max(...scores);
+  const scoreRange = maxScore - minScore || 1;
+
+  // Normalize to 0-1 then apply sigmoid stretch to amplify differences
+  const stretched = rawScores.map(d => {
+    const normalized = (d.rawScore - minScore) / scoreRange;
+    // Sigmoid-like stretch: push highs higher and lows lower
+    const stretched = sigmoidStretch(normalized, 3.5); // steepness
+    // Map to 30-98 range (never 0 or 100)
+    const finalScore = Math.round(30 + stretched * 68);
+    return { ...d, score: finalScore };
+  });
+
+  stretched.sort((a, b) => b.score - a.score);
+
+  // Generate relative reasons comparing to frontal baseline
+  const ranked = stretched.slice(0, TOP_N_RESULTS).map((d, i) => ({
+    yaw: d.bin.yaw,
+    pitch: d.bin.pitch,
+    score: d.score,
+    sampleCount: d.bin.samples.length,
+    metrics: d.metrics,
+    rawMetrics: d.rawMetrics,
+    snapshot: d.snapshot,
+    symmetry: d.bin.samples[Math.floor(d.bin.samples.length / 2)].symmetry,
+    name: angleName(d.bin.yaw, d.bin.pitch),
+    reasons: generateDataDrivenReasons(d, frontal),
+    scenes: suggestScenes2(d)
+  }));
+
+  const worstD = stretched[stretched.length - 1];
+  const worst = {
+    yaw: worstD.bin.yaw, pitch: worstD.bin.pitch,
+    score: worstD.score,
+    name: angleName(worstD.bin.yaw, worstD.bin.pitch),
+    snapshot: worstD.snapshot,
+    metrics: worstD.metrics, rawMetrics: worstD.rawMetrics
+  };
+
+  return { ranked, worst, frontal: frontal.rawMetrics, totalSamples: samples.length, totalBins: allBins.length };
+}
+
+// Sigmoid-like stretching to amplify score differences
+function sigmoidStretch(x, k) {
+  // Maps 0-1 → 0-1 with S-curve, k controls steepness
+  return 1 / (1 + Math.exp(-k * (x - 0.5)));
+}
+
+// Raw measurements (actual numbers for the reasons)
+function computeRawMeasurements(bin) {
+  const ss = bin.samples;
+  const lms = ss.map(s => s.landmarks);
+
+  // Face width/height ratio (actual %)
+  const faceRatios = lms.map(lm => {
+    const w = dist(lm[234], lm[454]);
+    const h = dist(lm[10], lm[152]);
+    return h > 0 ? w / h : 0.8;
+  });
+  const avgFaceRatio = avg(faceRatios);
+
+  // Eye openness (height/width)
+  const eyeOpen = lms.map(lm => {
+    const leH = dist(lm[159], lm[145]), leW = dist(lm[33], lm[133]);
+    const reH = dist(lm[386], lm[374]), reW = dist(lm[263], lm[362]);
+    return { left: leW > 0 ? leH / leW : 0, right: reW > 0 ? reH / reW : 0 };
+  });
+  const avgLeftEyeOpen = avg(eyeOpen.map(e => e.left));
+  const avgRightEyeOpen = avg(eyeOpen.map(e => e.right));
+  const avgEyeOpen = (avgLeftEyeOpen + avgRightEyeOpen) / 2;
+  const eyeDiffPct = avgEyeOpen > 0 ? Math.abs(avgLeftEyeOpen - avgRightEyeOpen) / avgEyeOpen * 100 : 0;
+
+  // Jaw angle (tighter = sharper)
+  const jawAngles = lms.map(lm => {
+    if (!lm[152] || !lm[234] || !lm[454]) return 1.0;
+    const la = Math.atan2(lm[152].y - lm[234].y, lm[152].x - lm[234].x);
+    const ra = Math.atan2(lm[152].y - lm[454].y, lm[454].x - lm[152].x);
+    return (la + ra) * (180 / Math.PI);
+  });
+  const avgJawAngle = avg(jawAngles);
+
+  // Mouth corner balance
+  const mouthDiffs = lms.map(lm => {
+    const nose = lm[1];
+    const ld = dist(lm[61], nose), rd = dist(lm[291], nose);
+    const avg2 = (ld + rd) / 2;
+    return avg2 > 0 ? Math.abs(ld - rd) / avg2 * 100 : 0;
+  });
+  const avgMouthDiffPct = avg(mouthDiffs);
+
+  return {
+    faceRatio: avgFaceRatio,
+    faceWidthPct: Math.round(avgFaceRatio * 100),
+    eyeOpenness: avgEyeOpen,
+    eyeOpenPct: Math.round(avgEyeOpen * 100),
+    leftEyeOpen: avgLeftEyeOpen,
+    rightEyeOpen: avgRightEyeOpen,
+    eyeDiffPct: Math.round(eyeDiffPct * 10) / 10,
+    jawAngle: avgJawAngle,
+    jawAngleDeg: Math.round(avgJawAngle),
+    mouthDiffPct: Math.round(avgMouthDiffPct * 10) / 10,
+  };
+}
+
+function computeRawScore(m, frontalM) {
+  // --- スコアリングエンジン v5 ---
+  // 設計原則:
+  //   1. faceSlim/jawlineは正面比の「改善度」で評価 → 角度との二重カウント防止
+  //   2. 極端なPitchではランドマーク計測が歪むため信頼度で割引
+  //   3. depth3dは角度ベースの独立指標だがウェイト控えめ
+  //   4. 笑顔は動的ウェイト（表情がない時は再配分）
+  //   5. pitchBonus/leftCheekBonusはタイブレーカー程度
+
+  // Pitch歪み補正: 極端なPitchではランドマーク系指標の信頼性が下がる
+  // ±10°以内なら1.0、それ以上で徐々に減衰、±25°超で0.3
+  const absPitch = Math.abs(m._pitch || 0);
+  const pitchReliability = absPitch <= 10 ? 1.0
+    : absPitch <= 15 ? 1.0 - (absPitch - 10) * 0.1    // 10°→1.0, 15°→0.5
+    : absPitch <= 25 ? 0.5 - (absPitch - 15) * 0.02   // 15°→0.5, 25°→0.3
+    : 0.25;
+
+  // 正面比の改善度 (0-1) × 信頼度
+  const slimImprove = frontalM
+    ? Math.min(1, Math.max(0, 0.5 + (m.faceSlim - frontalM.faceSlim) * 5)) * pitchReliability
+    : m.faceSlim * pitchReliability;
+  const jawImprove = frontalM
+    ? Math.min(1, Math.max(0, 0.5 + (m.jawline - frontalM.jawline) * 3)) * pitchReliability
+    : m.jawline * pitchReliability;
+  const eyeAdj = m.eyeProminence * pitchReliability;
+
+  // 笑顔の動的ウェイト
+  const smilePresence = Math.min(1, m.smileAesthetics * 1.5);
+  const smileW = 4 + smilePresence * 8; // 4〜12
+  const smileRedist = 12 - smileW;
+
+  const w = wearsGlasses
+    ? { jaw: 22 + smileRedist * 0.3, slim: 18 + smileRedist * 0.3, eye: 8,
+        depth: 8, smile: smileW, sym: 0.06, stab: 10,
+        nat: 6 + smileRedist * 0.2, pitch: 3 + smileRedist * 0.1, leftCheek: 3 }
+    : { jaw: 20 + smileRedist * 0.3, slim: 16 + smileRedist * 0.25, eye: 14,
+        depth: 8, smile: smileW, sym: 0.10, stab: 8,
+        nat: 5 + smileRedist * 0.2, pitch: 3 + smileRedist * 0.1, leftCheek: 3 };
+
+  let score = 0;
+  score += jawImprove        * w.jaw;   // 正面比の顎ライン改善度（歪み補正済み）
+  score += slimImprove       * w.slim;  // 正面比の小顔改善度（歪み補正済み）
+  score += eyeAdj            * w.eye;   // 目の大きさ（歪み補正済み）
+  score += m.depth3d         * w.depth;
+  score += m.smileAesthetics * w.smile;
+  score += m.symmetry        * w.sym;
+  score += m.stability       * w.stab;
+  score += m.naturalness     * w.nat;
+  score += m.pitchBonus      * w.pitch;
+  score += m.leftCheekBonus  * w.leftCheek;
+  return score;
+}
+
+function computeMetrics(bin) {
+  const ss = bin.samples;
+  const consistency = Math.max(0, 1 - variance(ss.map(s => s.symmetry.score)) * 0.02);
+  const rollStab = Math.max(0, 1 - avg(ss.map(s => Math.abs(s.roll))) / 15);
+  return {
+    jawline: avg(ss.map(s => evaluateJawline(s.landmarks))),
+    faceSlim: avg(ss.map(s => evaluateFaceSlim(s.landmarks))),
+    eyeProminence: avg(ss.map(s => evaluateEyeProminence(s.landmarks))),
+    depth3d: evaluate3DDepth(bin.yaw, bin.pitch),
+    smileAesthetics: avg(ss.map(s => evaluateSmileAesthetics(s.landmarks, s.blendshapes))),
+    symmetry: avg(ss.map(s => s.symmetry.score)),
+    naturalness: avg(ss.map(s => evaluateNaturalness(s.blendshapes))),
+    stability: consistency * 0.4 + rollStab * 0.6,
+    pitchBonus: evaluatePitchBonus(bin.pitch),
+    leftCheekBonus: evaluateLeftCheekBonus(bin.yaw),
+    _pitch: bin.pitch, // Pitch歪み補正用にスコアリングへ渡す
+  };
+}
+
+function evaluateFaceSlim(landmarks) {
+  if (!landmarks[234] || !landmarks[454] || !landmarks[10] || !landmarks[152]) return 0.5;
+  const w = dist(landmarks[234], landmarks[454]);
+  const h = dist(landmarks[10], landmarks[152]);
+  if (h < 0.001) return 0.5;
+  const r = w / h;
+  if (r < 0.55) return 0.4;
+  if (r < 0.65) return 0.8;
+  if (r <= 0.75) return 1.0;
+  if (r <= 0.85) return 0.7;
+  return Math.max(0.2, 1 - (r - 0.85) * 3);
+}
+
+function evaluateEyeProminence(landmarks) {
+  if (!landmarks[159] || !landmarks[145] || !landmarks[33] || !landmarks[133]) return 0.5;
+  const leH = dist(landmarks[159], landmarks[145]), leW = dist(landmarks[33], landmarks[133]);
+  const reH = dist(landmarks[386], landmarks[374]), reW = dist(landmarks[263], landmarks[362]);
+  const lr = leW > 0 ? leH / leW : 0, rr = reW > 0 ? reH / reW : 0;
+  const avgR = (lr + rr) / 2;
+  const fh = dist(landmarks[10], landmarks[152]);
+  const relSize = fh > 0 ? ((leW + reW) / 2) / fh : 0;
+  return Math.min(1, Math.max(0, (avgR - 0.1) / 0.35)) * 0.6 +
+         Math.min(1, Math.max(0, (relSize - 0.15) / 0.15)) * 0.4;
+}
+
+function evaluate3DDepth(yaw, pitch) {
+  // v4: 3/4ビュー（15-30°）が最も好評 (Lindsay et al. 2023)
+  // 正面は信頼感は高いが魅力はニュートラル (Baranowski & Hecht 2018)
+  const t = Math.sqrt(yaw ** 2 + pitch ** 2);
+  if (t < 3) return 0.5;     // 正面: ニュートラル (was 0.3)
+  if (t < 8) return 0.6;     // ほぼ正面 (was 0.5)
+  if (t < 15) return 0.85;   // やや斜め
+  if (t <= 30) return 1.0;   // 3/4ビュー: スイートスポット (was 8-25)
+  if (t <= 40) return 0.65;  // 横顔寄り
+  return Math.max(0.15, 1 - (t - 40) / 20);
+}
+
+// v4: 軽い下向きPitchボーナス (Marshall et al. 2020)
+// 下向き = 目が大きく、顎が小さく見え魅力UP
+// 上向きも別の魅力（力強さ）があるため、差は控えめに
+function evaluatePitchBonus(pitch) {
+  // pitch: 正=下向き, 負=上向き (MediaPipe規則)
+  if (pitch >= 3 && pitch <= 12) return 1.0;    // やや下向き: 最適
+  if (pitch > 12 && pitch <= 20) return 0.75;   // 下向きすぎ
+  if (pitch >= -3 && pitch < 3) return 0.65;    // ほぼ正面: ニュートラル
+  if (pitch >= -12 && pitch < -3) return 0.5;   // 上向き: やや不利だが極端でない
+  return 0.35;                                   // 極端な角度
+}
+
+// v4: 左頬ボーナス (Wake Forest Univ. / Selfiecity研究)
+// 他者から見て左頬を見せる = ユーザーが自分から見て右を向く = yawが負
+// 右脳が制御する左顔面の方が感情表現が豊かで好印象
+function evaluateLeftCheekBonus(yaw) {
+  if (yaw <= -5 && yaw >= -25) return 1.0;    // 左頬を見せる(他者視点): 最適
+  if (yaw < -25 && yaw >= -35) return 0.8;    // 左頬だが角度大きめ
+  if (yaw > -5 && yaw < 5) return 0.5;        // 正面: ニュートラル
+  if (yaw >= 5 && yaw <= 25) return 0.4;      // 右頬を見せる: やや不利
+  return 0.3;                                   // 極端な角度
+}
+
+function evaluateSmileAesthetics(landmarks, blendshapes) {
+  if (!landmarks[61] || !landmarks[291]) return 0.5;
+  const mouthTilt = Math.abs(landmarks[61].y - landmarks[291].y);
+  const mouthW = dist(landmarks[61], landmarks[291]);
+  const faceW = dist(landmarks[234], landmarks[454]);
+  const smileW = faceW > 0 ? mouthW / faceW : 0;
+  let smileScore = 0.5;
+  if (blendshapes?.length > 0) {
+    const sl = blendshapes.find(b => b.categoryName === 'mouthSmileLeft');
+    const sr = blendshapes.find(b => b.categoryName === 'mouthSmileRight');
+    if (sl && sr) {
+      smileScore = ((sl.score + sr.score) / 2) * 0.5 +
+                   (1 - Math.abs(sl.score - sr.score)) * 0.5;
+    }
+  }
+  const tiltS = Math.max(0, 1 - mouthTilt * 30);
+  const widthS = (smileW > 0.35 && smileW < 0.6) ? 1 : 0.5;
+  return tiltS * 0.3 + widthS * 0.2 + smileScore * 0.5;
+}
+
+function angleName(yaw, pitch) {
+  const parts = [];
+  if (yaw > 8) parts.push(`左${Math.abs(yaw)}°`);
+  else if (yaw < -8) parts.push(`右${Math.abs(yaw)}°`);
+  else parts.push('正面');
+  if (pitch < -8) parts.push(`やや上${Math.abs(pitch)}°`);
+  else if (pitch > 8) parts.push(`やや下${Math.abs(pitch)}°`);
+  return parts.join(' ');
+}
+
+// ── Data-driven reasons with actual measurements ──
+function generateDataDrivenReasons(d, frontal) {
+  const reasons = [];
+  const m = d.rawMetrics;
+  const fm = frontal.rawMetrics;
+  const bin = d.bin;
+
+  // 1. Face slimming (compare to frontal)
+  const slimDelta = ((fm.faceRatio - m.faceRatio) / fm.faceRatio * 100);
+  if (slimDelta > 3) {
+    reasons.push({
+      text: `正面と比べて顔幅が約${Math.round(slimDelta)}%スリムに見えます（横顔比 ${m.faceWidthPct}% → 正面 ${fm.faceWidthPct}%）`,
+      impact: slimDelta * 1.5,
+      metric: 'slim'
+    });
+  } else if (slimDelta < -3) {
+    reasons.push({
+      text: `顔幅が正面より${Math.round(Math.abs(slimDelta))}%広く見える角度です`,
+      impact: slimDelta,
+      metric: 'slim'
+    });
+  }
+
+  // 2. Eye openness
+  const eyeDelta = ((m.eyeOpenness - fm.eyeOpenness) / (fm.eyeOpenness || 0.001)) * 100;
+  if (eyeDelta > 5) {
+    reasons.push({
+      text: `目の開きが正面比で${Math.round(eyeDelta)}%大きく見えます（開き率 ${m.eyeOpenPct}%）`,
+      impact: eyeDelta,
+      metric: 'eye'
+    });
+  } else if (eyeDelta < -8) {
+    reasons.push({
+      text: `目の開きが正面より${Math.round(Math.abs(eyeDelta))}%小さく見えます`,
+      impact: eyeDelta * 0.5,
+      metric: 'eye'
+    });
+  }
+
+  // 3. Eye balance (left vs right)
+  const eyeBalanceDelta = fm.eyeDiffPct - m.eyeDiffPct;
+  if (m.eyeDiffPct < 5 && eyeBalanceDelta > 2) {
+    reasons.push({
+      text: `左右の目の差が${m.eyeDiffPct}%に収まります（正面では${fm.eyeDiffPct}%）`,
+      impact: eyeBalanceDelta * 2,
+      metric: 'eyeBalance'
+    });
+  } else if (m.eyeDiffPct > fm.eyeDiffPct + 5) {
+    reasons.push({
+      text: `左右の目の差が${m.eyeDiffPct}%に広がります（正面は${fm.eyeDiffPct}%）`,
+      impact: -m.eyeDiffPct,
+      metric: 'eyeBalance'
+    });
+  }
+
+  // 4. Jawline sharpness
+  const jawDelta = fm.jawAngle - m.jawAngle;
+  if (jawDelta > 3) {
+    reasons.push({
+      text: `顎の角度が${Math.round(Math.abs(jawDelta))}°シャープになり、フェイスラインが引き締まります`,
+      impact: jawDelta * 1.2,
+      metric: 'jaw'
+    });
+  }
+
+  // 5. 3D depth — updated for 3/4 view research
+  const totalAngle = Math.sqrt(bin.yaw ** 2 + bin.pitch ** 2);
+  if (totalAngle >= 15 && totalAngle <= 30) {
+    reasons.push({
+      text: `3/4ビュー（${Math.round(totalAngle)}°）は立体感と魅力が最も高まる角度です`,
+      impact: 14,
+      metric: 'depth'
+    });
+  } else if (totalAngle >= 8 && totalAngle < 15) {
+    reasons.push({
+      text: `角度${Math.round(totalAngle)}°で鼻筋・頬骨に自然な陰影が生まれます`,
+      impact: 8,
+      metric: 'depth'
+    });
+  } else if (totalAngle < 5) {
+    reasons.push({
+      text: `正面は信頼感・誠実さが伝わる角度です`,
+      impact: 4,
+      metric: 'depth'
+    });
+  }
+
+  // 5b. Pitch bonus — downward tilt makes eyes prominent (Marshall et al. 2020)
+  if (bin.pitch >= 3 && bin.pitch <= 12) {
+    reasons.push({
+      text: `やや下向き（${Math.round(bin.pitch)}°）で目が大きく、顎がすっきり見えます`,
+      impact: 10,
+      metric: 'pitch'
+    });
+  } else if (bin.pitch < -5) {
+    reasons.push({
+      text: `上向き（${Math.round(Math.abs(bin.pitch))}°）は顎が目立ち、支配的な印象になります`,
+      impact: -5,
+      metric: 'pitch'
+    });
+  }
+
+  // 5c. Left cheek bonus (Wake Forest Univ.)
+  // 他者視点で左頬 = ユーザーから見て右向き = yaw負
+  if (bin.yaw <= -5 && bin.yaw >= -30) {
+    reasons.push({
+      text: `左頬を見せる角度は感情表現が豊かに映り、好印象を与えます`,
+      impact: 8,
+      metric: 'leftCheek'
+    });
+  }
+
+  // 6. Mouth balance
+  if (m.mouthDiffPct < 3 && fm.mouthDiffPct > 5) {
+    reasons.push({
+      text: `口元の左右差が${m.mouthDiffPct}%と小さく自然です（正面は${fm.mouthDiffPct}%）`,
+      impact: (fm.mouthDiffPct - m.mouthDiffPct) * 1.5,
+      metric: 'mouth'
+    });
+  }
+
+  // Sort by impact (highest first) and take top 4
+  reasons.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+  let result = reasons.slice(0, 4).map(r => r.text);
+
+  // Ensure at least 2 reasons
+  if (result.length < 2) {
+    if (d.metrics.smileAesthetics > 0.65)
+      result.push('笑顔の左右バランスが整いやすい角度です');
+    if (d.metrics.naturalness > 0.8)
+      result.push('自然な表情が保ちやすい角度です');
+    if (result.length < 2)
+      result.push(`${d.bin.samples.length}サンプルから安定したスコアが出ています`);
+  }
+
+  return result;
+}
+
+function suggestScenes2(d) {
+  const scenes = [];
+  const y = Math.abs(d.bin.yaw), p = d.bin.pitch;
+  const m = d.metrics;
+
+  if (y < 8 && Math.abs(p) < 8) scenes.push('証明写真', 'ビデオ会議');
+  if (y >= 8 && y < 20 && Math.abs(p) < 15) scenes.push('プロフィール写真');
+  if (y >= 15 && y < 35) scenes.push('ポートレート');
+  if (p > 3 && p <= 12 && m.jawline > 0.5) scenes.push('自撮り（上から）');
+  if (p < -5 && m.eyeProminence > 0.6) scenes.push('見上げショット');
+  if (m.depth3d > 0.7) scenes.push('アーティスティック撮影');
+  if (m.smileAesthetics > 0.6) scenes.push('笑顔の写真');
+  if (d.score > 85) scenes.push('大事な撮影');
+  if (y >= 5 && y <= 25 && p >= 3 && p <= 12) scenes.push('SNS投稿');
+  if (d.bin.yaw <= -5 && d.bin.yaw >= -25) scenes.push('左頬ショット');
+
+  return scenes.length > 0 ? scenes : ['日常スナップ'];
+}
+
+// ══════════════════════════════════════════
+// RESULTS UI
+// ══════════════════════════════════════════
+function showResults(results) {
+  showScreen('results');
+  document.getElementById('header-sub').textContent = '分析完了';
+  const glassesLabel = wearsGlasses ? ' / メガネあり' : '';
+  document.getElementById('result-sub').textContent =
+    `${results.totalSamples}サンプル・${results.totalBins}ゾーンから分析${glassesLabel}`;
+  renderResults(results);
+  // Auto-save to IndexedDB
+  saveResultToDB(results).then(() => updateHistoryButton()).catch(e => console.warn('Save failed:', e));
+}
+
+function renderResults(results) {
+  const container = document.getElementById('results-container');
+  container.innerHTML = '';
+
+  results.ranked.forEach((r, i) => {
+    const rank = ['1st','2nd','3rd','4th','5th'][i] || `${i+1}th`;
+    const isBest = i === 0;
+    const delay = i * 0.1;
+
+    const card = document.createElement('div');
+    card.className = `result-card fade-in-up ${isBest ? 'best' : ''}`;
+    card.style.animationDelay = `${delay}s`;
+
+    card.innerHTML = `
+      <div class="rc-header">
+        <div class="rc-rank">${rank}</div>
+        ${r.snapshot
+          ? `<img class="rc-thumb" src="${r.snapshot}" alt="">`
+          : `<div class="rc-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--surface2);color:var(--text-dim);font-size:.55rem;text-align:center;line-height:1.3">
+              ${r.name.replace(' ','<br>')}
+            </div>`
+        }
+        <div class="rc-info">
+          <div class="rc-name">${r.name}</div>
+          <div class="rc-detail">Yaw ${r.yaw > 0 ? '+' : ''}${r.yaw}° / Pitch ${r.pitch > 0 ? '+' : ''}${r.pitch}° — ${r.sampleCount}サンプル</div>
+        </div>
+        <div class="rc-score">${r.score}</div>
+      </div>
+      <div class="rc-body">
+        <div class="reason-label">WHY THIS WORKS</div>
+        ${r.reasons.map(re => `<div class="reason-item">${re}</div>`).join('')}
+        <div class="scene-tags">
+          ${r.scenes.map(s => `<span class="scene-tag">${s}</span>`).join('')}
+        </div>
+        <button class="btn btn-sm btn-ghost practice-card-btn" data-idx="${i}" style="margin-top:.6rem;font-size:.65rem;padding:.25rem .6rem;">この角度を練習</button>
+      </div>
+    `;
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.practice-card-btn')) return;
+      card.classList.toggle('expanded');
+    });
+    const thumb = card.querySelector('img.rc-thumb');
+    if (thumb) {
+      thumb.style.cursor = 'zoom-in';
+      thumb.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openLightbox(thumb.src);
+      });
+    }
+    const practiceBtn = card.querySelector('.practice-card-btn');
+    practiceBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startPractice(r);
+    });
+    if (isBest) setTimeout(() => card.classList.add('expanded'), 500);
+
+    container.appendChild(card);
+  });
+
+  // Caution — also find snapshot for worst angle
+  const cc = document.getElementById('caution-container');
+  if (results.worst && results.worst.score < results.ranked[0]?.score - 10) {
+    const worstSnap = results.worst.snapshot;
+    cc.innerHTML = `
+      <div class="caution-card fade-in-up" style="animation-delay:.5s">
+        <div class="caution-title">⚠ AVOID</div>
+        <div style="display:flex;gap:.75rem;align-items:flex-start">
+          ${worstSnap
+            ? `<img src="${worstSnap}" style="width:48px;height:64px;border-radius:8px;object-fit:cover;border:1px solid rgba(232,114,114,0.2);flex-shrink:0" alt="">`
+            : ''
+          }
+          <div class="caution-text">
+            <strong>${results.worst.name}</strong>（スコア: ${results.worst.score}）は
+            顎ラインや立体感が出にくく、魅力が伝わりにくい角度です。撮影時はこの角度を避けると良いでしょう。
+          </div>
+        </div>
+      </div>`;
+    const worstThumb = cc.querySelector('img');
+    if (worstThumb) {
+      worstThumb.style.cursor = 'zoom-in';
+      worstThumb.addEventListener('click', () => openLightbox(worstThumb.src));
+    }
+  } else {
+    cc.innerHTML = '';
+  }
+
+  // Actions
+  const bestAngle = results.ranked[0];
+  document.getElementById('result-actions').innerHTML = `
+    <button class="btn filled" id="btn-practice">ベストアングルを練習</button>
+    <button class="btn btn-sm btn-ghost" id="btn-rescan">もう一度スキャン</button>
+    <button class="btn btn-sm btn-ghost" id="btn-history-back">履歴一覧</button>
+    <button class="btn btn-sm btn-ghost" id="btn-save">結果をJSON保存</button>
+  `;
+  if (bestAngle) {
+    document.getElementById('btn-practice').addEventListener('click', () => startPractice(bestAngle));
+  }
+  document.getElementById('btn-rescan').addEventListener('click', resetAndScan);
+  document.getElementById('btn-history-back').addEventListener('click', showHistory);
+  document.getElementById('btn-save').addEventListener('click', () => saveJSON(results));
+}
+
+function saveJSON(results) {
+  const data = {
+    timestamp: new Date().toISOString(),
+    totalSamples: results.totalSamples,
+    totalBins: results.totalBins,
+    ranked: results.ranked.map(r => ({
+      name: r.name, yaw: r.yaw, pitch: r.pitch,
+      score: r.score, sampleCount: r.sampleCount,
+      reasons: r.reasons, scenes: r.scenes
+    }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `facet-${Date.now()}.json`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetAndScan() {
+  samples = [];
+  heatmapData = Array.from({ length: HEATMAP_ROWS }, () => new Float32Array(HEATMAP_COLS));
+  frameCount = 0;
+  smoothYaw = 0; smoothPitch = 0; smoothRoll = 0;
+  scanStartTime = performance.now();
+  document.getElementById('h-samples').textContent = '0';
+  document.getElementById('coverage-pct').textContent = '0%';
+  showScreen('scan');
+  document.getElementById('header-sub').textContent = 'スキャン中...';
+  running = true;
+  scanLoop();
+}
+
+// ══════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(`${name}-screen`).classList.add('active');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+function variance(arr) {
+  if (arr.length < 2) return 0;
+  const m = avg(arr);
+  return avg(arr.map(v => (v - m) ** 2));
+}
+
+// ── Euler from matrix ──
+function matrixToEuler(m) {
+  const r00=m[0],r01=m[1],r02=m[2],r10=m[4],r11=m[5],r12=m[6],r20=m[8],r21=m[9],r22=m[10];
+  let yaw,pitch,roll;
+  if (Math.abs(r21) < 0.99999) {
+    pitch = Math.asin(-r21);
+    yaw = Math.atan2(r20, r22);
+    roll = Math.atan2(r01, r11);
+  } else {
+    pitch = r21 > 0 ? -Math.PI/2 : Math.PI/2;
+    yaw = Math.atan2(-r02, r00);
+    roll = 0;
+  }
+  const d = 180/Math.PI;
+  return { yaw: yaw*d, pitch: pitch*d, roll: roll*d };
+}
+
+// ── Fallback angles from landmarks ──
+function landmarkAngles(lm) {
+  const nose=lm[1],le=lm[33],re=lm[263],chin=lm[152],fh=lm[10];
+  const emx=(le.x+re.x)/2, ew=Math.abs(re.x-le.x)||.001;
+  const yaw=((nose.x-emx)/ew)*60;
+  const emy=(le.y+re.y)/2, fh2=Math.abs(chin.y-fh.y)||.001;
+  const pitch=((nose.y-emy)/fh2-0.33)*80;
+  const roll=Math.atan2(re.y-le.y,re.x-le.x)*(180/Math.PI);
+  return { yaw, pitch: -pitch, roll: -roll };
+}
+
+// ── Face mesh draw ──
+function drawFaceMesh(landmarks) {
+  const pts=[33,160,158,133,153,144,263,387,385,362,380,373,1,2,98,327,61,291,0,17,10,152,234,454];
+  ctx.fillStyle='rgba(232,200,114,0.3)';
+  for(const i of pts){const p=landmarks[i];ctx.beginPath();ctx.arc(p.x*canvas.width,p.y*canvas.height,1.5,0,Math.PI*2);ctx.fill();}
+  drawConn(landmarks,[33,160,158,133,153,144,33],'rgba(232,200,114,0.18)');
+  drawConn(landmarks,[263,387,385,362,380,373,263],'rgba(232,200,114,0.18)');
+}
+function drawConn(lm,ids,color){ctx.strokeStyle=color;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(lm[ids[0]].x*canvas.width,lm[ids[0]].y*canvas.height);for(let i=1;i<ids.length;i++)ctx.lineTo(lm[ids[i]].x*canvas.width,lm[ids[i]].y*canvas.height);ctx.stroke();}
+
+// ── Symmetry ──
+function analyzeSymmetry(landmarks) {
+  const nose=landmarks[1];
+  const leH=dist(landmarks[159],landmarks[145]),leW=dist(landmarks[33],landmarks[133]);
+  const reH=dist(landmarks[386],landmarks[374]),reW=dist(landmarks[263],landmarks[362]);
+  const ler=leW>0?leH/leW:0,rer=reW>0?reH/reW:0;
+  const lmd=dist(landmarks[61],nose),rmd=dist(landmarks[291],nose);
+  const me=Math.max(ler,rer,.001),mm=Math.max(lmd,rmd,.001);
+  const lep=(ler/me)*100,rep=(rer/me)*100,lmp=(lmd/mm)*100,rmp=(rmd/mm)*100;
+  const es=100-Math.abs(lep-rep),ms=100-Math.abs(lmp-rmp)*2;
+  return{leftEye:lep,rightEye:rep,leftMouth:lmp,rightMouth:rmp,score:Math.max(0,Math.min(100,es*.6+ms*.4))};
+}
+function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+((a.z||0)-(b.z||0))**2);}
+
+// ── Jawline ──
+function evaluateJawline(landmarks) {
+  if(!landmarks[152]||!landmarks[234]||!landmarks[454])return .5;
+  const chin=landmarks[152],jl=landmarks[234],jr=landmarks[454];
+  const la=Math.atan2(chin.y-jl.y,chin.x-jl.x);
+  const ra=Math.atan2(chin.y-jr.y,jr.x-chin.x);
+  return Math.max(0,Math.min(1,1-(la+ra-0.8)/1.2));
+}
+
+// ── Naturalness ──
+function evaluateNaturalness(bs) {
+  if(!bs||!bs.length)return .7;
+  let ext=0;
+  for(const b of bs) if(b.score>.5) ext+=b.score;
+  return Math.max(0,Math.min(1,1-ext*.1));
+}
+
+// ── Boot ──
+document.getElementById('glasses-btn').addEventListener('click', () => {
+  wearsGlasses = !wearsGlasses;
+  document.getElementById('glasses-btn').textContent = wearsGlasses ? 'メガネあり' : 'メガネなし';
+  document.getElementById('glasses-btn').style.borderColor = wearsGlasses ? 'var(--accent)' : '';
+  document.getElementById('glasses-btn').style.color = wearsGlasses ? 'var(--accent)' : '';
+});
+startBtn.addEventListener('click', startCamera);
+initMediaPipe();
+</script>
+</body>
+</html>
